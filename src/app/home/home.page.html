@@ -1,0 +1,51 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-title slot="start">
+      ImgSync
+    </ion-title>
+    <ion-button 
+      slot="end" 
+      expand="block" 
+      fill="clear" 
+      shape="round" 
+      (click)="savePost()"
+      [disabled]="!description.trim() || !fileToUpload"> 
+      Save
+    </ion-button>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <div class="image-upload-container" (click)="selectImageSource()">
+    <div class="upload-area">
+      <div *ngIf="!selectedImage" class="upload-prompt">
+        <ion-icon name="camera-outline" size="large"></ion-icon>
+        <ion-label>Add Image</ion-label>
+      </div>
+      <div *ngIf="selectedImage" class="image-preview">
+        <img [src]="selectedImage" alt="Preview">
+        <ion-button 
+          fill="clear" 
+          color="light"
+          (click)="removeImage($event)"
+          class="remove-button">
+          <ion-icon name="close-circle" color="danger"></ion-icon>
+        </ion-button>
+      </div>
+    </div>
+  </div>
+
+  <div class="description-section">
+    <ion-textarea
+      [(ngModel)]="description"
+      #descInput="ngModel"
+      label="Description"
+      labelPlacement="floating"
+      fill="outline"
+      placeholder="Enter a description..."
+      [counter]="true"
+      maxlength="200"
+      [autoGrow]="true">
+    </ion-textarea>
+  </div>
+</ion-content>

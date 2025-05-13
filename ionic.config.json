@@ -1,0 +1,7 @@
+{
+  "name": "imgSync",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular"
+}

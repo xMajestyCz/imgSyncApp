@@ -1,0 +1,76 @@
+.image-upload-container {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+}
+
+.upload-area {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 18rem;
+  height: 20rem;
+  background-color: #FAFAFB;
+  border-radius: 1rem;
+  border: 2px dashed #C1C7CE;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  margin-top: 5vh;
+
+  .upload-prompt {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    
+    ion-icon {
+      color: #C1C7CE;
+      font-size: 3rem;
+    }
+    
+    ion-label {
+      color: #6C757D;
+    }
+  }
+
+  .image-preview {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .remove-button {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      --padding-start: 0;
+      --padding-end: 0;
+      --padding-top: 0;
+      --padding-bottom: 0;
+      width: 32px;
+      height: 32px;
+      
+      ion-icon {
+        font-size: 1.5rem;
+        background-color: rgba(255, 255, 255, 0.7);
+        border-radius: 50%;
+      }
+    }
+  }
+}
+
+.description-section {
+  padding: 0 16px;
+  margin-top: 2rem;
+  
+  ion-textarea {
+    width: 100%;
+    border-radius: 1rem;
+  }
+}
