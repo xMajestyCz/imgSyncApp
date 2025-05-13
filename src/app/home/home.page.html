@@ -10,7 +10,7 @@
       shape="round" 
       (click)="savePost()"
       [disabled]="!description.trim() || !fileToUpload"> 
-      Save
+      Guardar
     </ion-button>
   </ion-toolbar>
 </ion-header>
@@ -20,7 +20,7 @@
     <div class="upload-area">
       <div *ngIf="!selectedImage" class="upload-prompt">
         <ion-icon name="camera-outline" size="large"></ion-icon>
-        <ion-label>Add Image</ion-label>
+        <ion-label>Añadir Imagen</ion-label>
       </div>
       <div *ngIf="selectedImage" class="image-preview">
         <img [src]="selectedImage" alt="Preview">
@@ -39,7 +39,7 @@
     <ion-textarea
       [(ngModel)]="description"
       #descInput="ngModel"
-      label="Description"
+      label="Descripción"
       labelPlacement="floating"
       fill="outline"
       placeholder="Enter a description..."
@@ -48,4 +48,28 @@
       [autoGrow]="true">
     </ion-textarea>
   </div>
+  <ion-button id="open-modal" expand="block" (click)="loadLastPost()">Ver Última Imagen</ion-button>
+
 </ion-content>
+<ion-modal #modalRef trigger="open-modal" [initialBreakpoint]="0.25" [breakpoints]="[0, 0.5, 0.75]">
+  <ng-template>
+    <ion-content class="ion-padding">
+      <ion-searchbar placeholder="Search" (click)="modalRef.setCurrentBreakpoint(0.75)"></ion-searchbar>
+
+      <ion-list *ngIf="lastPost">
+        <ion-item>
+          <ion-avatar slot="start">
+            <ion-img [src]="lastPost.imageUrl"></ion-img>
+          </ion-avatar>
+          <ion-label>
+            <h2>{{ lastPost.description }}</h2>
+          </ion-label>
+        </ion-item>
+      </ion-list>
+
+      <ion-note *ngIf="!lastPost">
+        No data found.
+      </ion-note>
+    </ion-content>
+  </ng-template>
+</ion-modal>

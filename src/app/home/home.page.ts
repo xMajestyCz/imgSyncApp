@@ -6,6 +6,7 @@ import { environment } from 'src/environments/environment';
 import { CameraSource } from '@capacitor/camera';
 import { CameraService } from '../core/services/camera.service';
 import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
 
 @Component({
   selector: 'app-home',
@@ -18,6 +19,8 @@ export class HomePage {
   selectedImage: string | null = null;
   fileToUpload: File | null = null;
   isLoading = false;
+  lastPost: { description: string, imageUrl: string, timestamp: number } | null = null;
+
 
   constructor(
     private firestoreService: FirestoreService,
@@ -27,6 +30,15 @@ export class HomePage {
     private loadingController: LoadingController,
     private actionSheetController: ActionSheetController
   ) {}
+
+  async loadLastPost() {
+    const result = await Preferences.get({ key: 'widget_data' });
+    if (result.value) {
+      this.lastPost = JSON.parse(result.value);
+    } else {
+      this.lastPost = null;
+    }
+  }
 
   async selectImageSource() {
     const actionSheet = await this.actionSheetController.create({

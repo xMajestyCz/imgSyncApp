@@ -5,19 +5,27 @@ import android.appwidget.AppWidgetProvider;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
+import android.os.Handler;
+import android.os.Looper;
 import android.widget.RemoteViews;
 import android.util.Log;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.request.target.AppWidgetTarget;
 import com.bumptech.glide.request.RequestListener;
 import com.bumptech.glide.load.engine.GlideException;
 import com.bumptech.glide.request.target.Target;
+import com.bumptech.glide.load.resource.bitmap.BitmapTransitionOptions;
+import com.bumptech.glide.request.RequestOptions;
 
 import org.json.JSONObject;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -30,17 +38,28 @@ import java.util.concurrent.TimeUnit;
 public class ImgSyncWidgetProvider extends AppWidgetProvider {
     private static final String PREFS_NAME = "CapacitorStorage";
     private static final String WIDGET_DATA_KEY = "widget_data";
-    private static final String LAST_POST_KEY = "last_post"; // Nueva clave alternativa
-    private static final long UPDATE_INTERVAL_MINUTES = 5;
+    private static final String LAST_POST_KEY = "last_post";
+    private static final long ROTATION_INTERVAL_MS = 5000; // 5 segundos
+    private static final long UPDATE_INTERVAL_MINUTES = 15; // Mínimo permitido por WorkManager
+
     private final Executor executor = Executors.newSingleThreadExecutor();
+    private static Handler rotationHandler;
+    private static Runnable rotationRunnable;
+    private static int currentImageIndex = 0;
 
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
         Log.d("WIDGET_LIFECYCLE", "onUpdate triggered");
-        schedulePeriodicUpdate(context);
 
+        // Detener rotación anterior si existe
+        stopImageRotation();
+
+        // Iniciar rotación automática
+        startImageRotation(context, appWidgetManager, appWidgetIds);
+
+        // Actualización inicial
         for (int appWidgetId : appWidgetIds) {
-            updateWidget(context, appWidgetManager, appWidgetId);
+            updateWidget(context, appWidgetManager, appWidgetId, true);
         }
     }
 
@@ -48,6 +67,12 @@ public class ImgSyncWidgetProvider extends AppWidgetProvider {
     public void onEnabled(Context context) {
         Log.d("WIDGET_LIFECYCLE", "Widget enabled");
         schedulePeriodicUpdate(context);
+    }
+
+    @Override
+    public void onDisabled(Context context) {
+        Log.d("WIDGET_LIFECYCLE", "Widget disabled");
+        stopImageRotation();
     }
 
     private void schedulePeriodicUpdate(Context context) {
@@ -60,85 +85,137 @@ public class ImgSyncWidgetProvider extends AppWidgetProvider {
         WorkManager.getInstance(context)
             .enqueueUniquePeriodicWork(
                 "widgetUpdateWork",
-                ExistingPeriodicWorkPolicy.REPLACE, // Cambiado a REPLACE para asegurar actualizaciones
+                ExistingPeriodicWorkPolicy.REPLACE,
                 widgetUpdateRequest);
 
-        Log.d("WIDGET_SCHEDULER", "Scheduled next update in " + UPDATE_INTERVAL_MINUTES + " minutes");
+        Log.d("WIDGET_SCHEDULER", "Scheduled background update every " + UPDATE_INTERVAL_MINUTES + " minutes");
     }
 
-    private void updateWidget(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {
+    private void startImageRotation(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
+        rotationHandler = new Handler(Looper.getMainLooper());
+
+        rotationRunnable = new Runnable() {
+            @Override
+            public void run() {
+                List<String> imageUrls = getAllImageUrlsFromPreferences(context);
+
+                if (!imageUrls.isEmpty()) {
+                    currentImageIndex = (currentImageIndex + 1) % imageUrls.size();
+                    String nextImageUrl = imageUrls.get(currentImageIndex);
+
+                    for (int appWidgetId : appWidgetIds) {
+                        updateWidgetImage(context, appWidgetManager, appWidgetId, nextImageUrl);
+                    }
+                }
+
+                rotationHandler.postDelayed(this, ROTATION_INTERVAL_MS);
+            }
+        };
+
+        rotationHandler.postDelayed(rotationRunnable, ROTATION_INTERVAL_MS);
+    }
+
+    private void stopImageRotation() {
+        if (rotationHandler != null && rotationRunnable != null) {
+            rotationHandler.removeCallbacks(rotationRunnable);
+            rotationHandler = null;
+            rotationRunnable = null;
+        }
+    }
+
+    private void updateWidget(Context context, AppWidgetManager appWidgetManager,
+                            int appWidgetId, boolean initialLoad) {
         executor.execute(() -> {
             try {
-                // 1. Obtener preferencias compartidas
                 SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-
-                // 2. Depuración: Mostrar todas las preferencias disponibles
-                Map<String, ?> allPrefs = prefs.getAll();
-                Log.d("WIDGET_DATA", "All preferences: " + allPrefs.toString());
-
-                // 3. Intentar obtener datos de ambas claves posibles
                 String jsonData = prefs.getString(WIDGET_DATA_KEY,
                                     prefs.getString(LAST_POST_KEY, "{}"));
 
-                Log.d("WIDGET_DATA", "Raw JSON data: " + jsonData);
-
-                // 4. Parsear JSON
                 JSONObject data = new JSONObject(jsonData);
                 String description = data.optString("description", "No description available");
                 String imageUrl = data.optString("imageUrl", "");
 
-                Log.d("WIDGET_DATA", "Description: " + description);
-                Log.d("WIDGET_DATA", "Image URL: " + imageUrl);
-
-                // 5. Preparar la vista del widget
                 RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_layout);
                 views.setTextViewText(R.id.widget_description, description);
 
-                // 6. Cargar imagen con manejo robusto de errores
                 if (!imageUrl.isEmpty() && imageUrl.startsWith("http")) {
-                    try {
-                        AppWidgetTarget target = new AppWidgetTarget(
-                            context.getApplicationContext(),
-                            R.id.widget_image,
-                            views,
-                            appWidgetId);
-
-                        Glide.with(context.getApplicationContext())
-                            .asBitmap()
-                            .load(imageUrl)
-                            .listener(new RequestListener<Bitmap>() {
-                                @Override
-                                public boolean onLoadFailed(@Nullable GlideException e, Object model,
-                                                            Target<Bitmap> target, boolean isFirstResource) {
-                                    Log.e("GLIDE_ERROR", "Load failed: " + (e != null ? e.getMessage() : "Unknown error"));
-                                    return false;
-                                }
-
-                                @Override
-                                public boolean onResourceReady(Bitmap resource, Object model,
-                                                             Target<Bitmap> target, DataSource dataSource,
-                                                             boolean isFirstResource) {
-                                    Log.d("GLIDE_SUCCESS", "Image loaded successfully");
-                                    return false;
-                                }
-                            })
-                            .into(target);
-
-                        Log.d("WIDGET_IMAGE", "Image load initiated");
-                    } catch (Exception e) {
-                        Log.e("WIDGET_ERROR", "Glide initialization failed: " + e.getMessage());
-                    }
-                } else {
-                    Log.e("WIDGET_ERROR", "Invalid image URL: " + imageUrl);
+                    loadImageWithGlide(context, appWidgetId, views, imageUrl, initialLoad);
                 }
 
-                // 7. Actualizar el widget
                 appWidgetManager.updateAppWidget(appWidgetId, views);
-                Log.d("WIDGET_UPDATE", "Widget updated successfully");
 
             } catch (Exception e) {
                 Log.e("WIDGET_ERROR", "Update failed: " + e.getMessage(), e);
             }
         });
+    }
+
+    private void updateWidgetImage(Context context, AppWidgetManager appWidgetManager,
+                                 int appWidgetId, String imageUrl) {
+        executor.execute(() -> {
+            try {
+                RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_layout);
+
+                // Mantener la descripción actual
+                SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+                String jsonData = prefs.getString(WIDGET_DATA_KEY,
+                                    prefs.getString(LAST_POST_KEY, "{}"));
+                JSONObject data = new JSONObject(jsonData);
+                String description = data.optString("description", "No description available");
+                views.setTextViewText(R.id.widget_description, description);
+
+                loadImageWithGlide(context, appWidgetId, views, imageUrl, false);
+
+                // Actualización parcial para evitar parpadeo
+                appWidgetManager.partiallyUpdateAppWidget(appWidgetId, views);
+
+            } catch (Exception e) {
+                Log.e("WIDGET_ERROR", "Image rotation failed: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    private void loadImageWithGlide(Context context, int appWidgetId,
+                                  RemoteViews views, String imageUrl, boolean initialLoad) {
+        try {
+            AppWidgetTarget target = new AppWidgetTarget(context, R.id.widget_image, views, appWidgetId);
+
+            Glide.with(context.getApplicationContext())
+                .asBitmap()
+                .load(imageUrl)
+                .apply(new RequestOptions()
+                    .dontAnimate() // Desactivar animación por defecto
+                    .skipMemoryCache(false) // Usar cache de memoria
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)) // Cachear en disco
+                .transition(BitmapTransitionOptions.withCrossFade(500)) // Transición suave de 500ms
+                .into(target);
+                
+        } catch (Exception e) {
+            Log.e("GLIDE_ERROR", "Image load failed: " + e.getMessage(), e);
+        }
+    }
+
+    private List<String> getAllImageUrlsFromPreferences(Context context) {
+        List<String> imageUrls = new ArrayList<>();
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        Map<String, ?> allEntries = prefs.getAll();
+
+        for (Map.Entry<String, ?> entry : allEntries.entrySet()) {
+            try {
+                if (entry.getKey().startsWith("widget_data") || entry.getKey().startsWith("last_post")) {
+                    JSONObject data = new JSONObject((String) entry.getValue());
+                    if (data.has("imageUrl")) {
+                        String url = data.getString("imageUrl");
+                        if (url.startsWith("http")) {
+                            imageUrls.add(url);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                Log.e("WIDGET_DATA", "Error parsing: " + entry.getKey(), e);
+            }
+        }
+
+        return imageUrls;
     }
 }

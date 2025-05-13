@@ -8,13 +8,11 @@
     android:elevation="4dp">
 
     <ImageView
-        android:id="@+id/widget_image"
-        android:layout_width="match_parent"
-        android:layout_height="180dp"
-        android:scaleType="centerCrop"
-        android:contentDescription="Imagen del post"
-        android:importantForAccessibility="yes"
-        android:adjustViewBounds="true"/>
+    android:id="@+id/widget_image"
+    android:layout_width="match_parent"
+    android:layout_height="180dp"
+    android:scaleType="centerCrop"
+    android:background="@android:color/white"/>
 
     <TextView
         android:id="@+id/widget_description"

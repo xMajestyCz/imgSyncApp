@@ -9,14 +9,12 @@ android {
 
 apply from: "../capacitor-cordova-android-plugins/cordova.variables.gradle"
 dependencies {
-    implementation 'androidx.work:work-runtime:2.10.1'
-  implementation project(':capacitor-app')
+    implementation project(':capacitor-app')
     implementation project(':capacitor-camera')
     implementation project(':capacitor-haptics')
     implementation project(':capacitor-keyboard')
     implementation project(':capacitor-preferences')
     implementation project(':capacitor-status-bar')
-    implementation project(':capacitor-img-sync-prefs')
 
 }
 

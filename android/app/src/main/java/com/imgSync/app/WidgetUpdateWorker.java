@@ -22,10 +22,11 @@ public class WidgetUpdateWorker extends Worker {
             AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(context);
             ComponentName thisWidget = new ComponentName(context, ImgSyncWidgetProvider.class);
             int[] appWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget);
-            
-            // Actualizar el widget directamente sin crear nueva instancia
-            ImgSyncWidgetProvider widgetProvider = new ImgSyncWidgetProvider();
-            widgetProvider.onUpdate(context, appWidgetManager, appWidgetIds);
+
+            if (appWidgetIds.length > 0) {
+                ImgSyncWidgetProvider widgetProvider = new ImgSyncWidgetProvider();
+                widgetProvider.onUpdate(context, appWidgetManager, appWidgetIds);
+            }
             
             return Result.success();
         } catch (Exception e) {
