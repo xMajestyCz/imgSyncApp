@@ -1,6 +1,6 @@
-import { Component } from '@angular/core';
+import { Component, ViewChild } from '@angular/core';
 import { FirestoreService } from '../core/services/firestore.service';
-import { AlertController, LoadingController, ActionSheetController } from '@ionic/angular';
+import { AlertController, LoadingController, ActionSheetController, IonModal } from '@ionic/angular';
 import { SupabaseService } from '../core/services/supabase.service';
 import { environment } from 'src/environments/environment';
 import { CameraSource } from '@capacitor/camera';
@@ -15,12 +15,18 @@ import { Preferences } from '@capacitor/preferences';
   standalone: false
 })
 export class HomePage {
+  @ViewChild('listModal') listModal!: IonModal;
+  @ViewChild('viewModal') viewModal!: IonModal;
+  
   description = '';
   selectedImage: string | null = null;
   fileToUpload: File | null = null;
   isLoading = false;
-  lastPost: { description: string, imageUrl: string, timestamp: number } | null = null;
-
+  posts: any[] = [];
+  filteredPosts: any[] = [];
+  searchTerm = '';
+  viewedImageUrl: string = '';
+  viewedImageDescription: string = '';
 
   constructor(
     private firestoreService: FirestoreService,
@@ -31,15 +37,65 @@ export class HomePage {
     private actionSheetController: ActionSheetController
   ) {}
 
-  async loadLastPost() {
-    const result = await Preferences.get({ key: 'widget_data' });
-    if (result.value) {
-      this.lastPost = JSON.parse(result.value);
-    } else {
-      this.lastPost = null;
+  async loadPosts() {
+    try {
+      this.posts = await this.firestoreService.getPosts();
+      this.filteredPosts = [...this.posts];
+    } catch (error) {
+      console.error('Error cargando imagenes:', error);
+      await this.showAlert('Error', 'No se pudieron cargar las imagenes');
     }
   }
 
+  filterPosts(event: any) {
+    this.searchTerm = event.target.value.toLowerCase();
+    this.filteredPosts = this.posts.filter(post => 
+      post.description.toLowerCase().includes(this.searchTerm)
+    );
+  }
+
+  async deletePost(postId: string, event: Event) {
+    event.stopPropagation();
+    
+    const alert = await this.alertController.create({
+      header: 'Confirmar',
+      message: '¿Estás seguro de que quieres eliminar esta publicación?',
+      buttons: [
+        {
+          text: 'Cancelar',
+          role: 'cancel'
+        },
+        {
+          text: 'Eliminar',
+          handler: async () => {
+            const loading = await this.loadingController.create({
+              message: 'Eliminando publicación...'
+            });
+            await loading.present();
+            
+            try {
+              await this.firestoreService.deletePost(postId);
+              await this.loadPosts();
+            } catch (error) {
+              await this.showAlert('Error', 'No se pudo eliminar la publicación');
+            } finally {
+              await loading.dismiss();
+            }
+          }
+        }
+      ]
+    });
+
+    await alert.present();
+  }
+
+  async viewPost(post: any) {
+    this.viewedImageUrl = post.imageUrl;
+    this.viewedImageDescription = post.description;
+    await this.listModal.dismiss();
+    await this.viewModal.present();
+  }
+  
   async selectImageSource() {
     const actionSheet = await this.actionSheetController.create({
       header: 'Seleccionar Imagen',
@@ -108,13 +164,11 @@ export class HomePage {
     try {
       await loading.present();
 
-      // Subir imagen a Supabase
       const imageUrl = await this.supabaseService.uploadImage(
         environment.supabaseBucket, 
         this.fileToUpload
       );
 
-      // Guardar post en Firestore y Preferences
       await this.firestoreService.savePost({
         description: this.description,
         imageUrl
@@ -137,20 +191,6 @@ export class HomePage {
     this.fileToUpload = null;
   }
 
-  private validateForm(): boolean {
-    if (!this.description.trim()) {
-      this.showAlert('Validation Error', 'Please enter a description');
-      return false;
-    }
-
-    if (!this.fileToUpload) {
-      this.showAlert('Validation Error', 'Please select an image');
-      return false;
-    }
-
-    return true;
-  }
-
   private resetForm() {
     this.description = '';
     this.selectedImage = null;
@@ -164,5 +204,22 @@ export class HomePage {
       buttons: ['OK']
     });
     await alert.present();
+  }
+
+  async refreshWidgetData() {
+    try {
+      const posts = await this.firestoreService.getAllPostsForWidget();
+      
+      await Preferences.set({
+        key: 'widget_data',
+        value: JSON.stringify({
+          posts: posts,
+          lastUpdate: Date.now()
+        })
+      });
+      
+    } catch (error) {
+      console.error('Error updating widget data:', error);
+    }
   }
 }

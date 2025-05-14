@@ -1,5 +1,14 @@
 import { Injectable } from '@angular/core';
-import { Firestore, addDoc, collection } from '@angular/fire/firestore';
+import { 
+  Firestore, 
+  addDoc, 
+  collection, 
+  deleteDoc, 
+  doc, 
+  getDocs, 
+  orderBy, 
+  query 
+} from '@angular/fire/firestore';
 import { Timestamp } from '@firebase/firestore';
 import { Preferences } from '@capacitor/preferences';
 
@@ -11,41 +20,82 @@ export class FirestoreService {
 
   async savePost(data: { description: string, imageUrl: string }) {
     try {
-      // Guardar en Firestore
-      const docRef = await addDoc(collection(this.firestore, 'posts'), {
+      const postData = {
         description: data.description,
         imageUrl: data.imageUrl,
         createdAt: Timestamp.now()
-      });
+      };
 
-      // ¡CORREGIR ESTA PARTE! Usar 'widget_data' en lugar de 'last_post'
-      await Preferences.set({
-        key: 'widget_data', // ← Cambiar esto
-        value: JSON.stringify({
-          description: data.description,
-          imageUrl: data.imageUrl,
-          timestamp: Date.now()
-        })
-      });
-
-      await Preferences.set({
-        key: 'last_post', // Mantener compatibilidad con versión anterior
-        value: JSON.stringify({
-          description: data.description,
-          imageUrl: data.imageUrl,
-          timestamp: Date.now()
-        })
-      });
-
-      console.log('Datos guardados para widget:', { 
-        description: data.description,
-        imageUrl: data.imageUrl 
-      });
-
-      return docRef.id;
+      const docRef = await addDoc(collection(this.firestore, 'posts'), postData);
+      
+      await this.updateWidgetPreferences(data.imageUrl, data.description);
+      
+      return { id: docRef.id, ...postData };
     } catch (error) {
-      console.error('Error saving to Preferences:', error);
+      console.error('Error saving post:', error);
       throw error;
     }
   }
+
+  async getAllPostsForWidget(): Promise<{imageUrl: string, description: string}[]> {
+    try {
+      const postsCollection = collection(this.firestore, 'posts');
+      const q = query(postsCollection, orderBy('createdAt', 'desc'));
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map(doc => ({
+        imageUrl: doc.data()['imageUrl'],
+        description: doc.data()['description']
+      }));
+    } catch (error) {
+      console.error('Error getting posts:', error);
+      throw error;
+    }
+  }
+
+  private async updateWidgetPreferences(imageUrl: string, description: string) {
+    try {
+      const currentPosts = await this.getAllPostsForWidget();
+      
+      currentPosts.unshift({imageUrl, description});
+      
+      await Preferences.set({
+        key: 'widget_data',
+        value: JSON.stringify({
+          posts: currentPosts,
+          lastUpdate: Date.now()
+        })
+      });
+    } catch (error) {
+      console.error('Error updating widget preferences:', error);
+      throw error;
+    }
+  }
+
+  async getPosts() {
+    try {
+      const postsCollection = collection(this.firestore, 'posts');
+      const q = query(postsCollection, orderBy('createdAt', 'desc'));
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data()['createdAt']?.toDate()
+      }));
+    } catch (error) {
+      console.error('Error getting posts:', error);
+      throw error;
+    }
+  }
+
+  async deletePost(postId: string) {
+    try {
+      await deleteDoc(doc(this.firestore, 'posts', postId));
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      throw error;
+    }
+  }
+
 }

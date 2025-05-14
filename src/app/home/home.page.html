@@ -48,27 +48,61 @@
       [autoGrow]="true">
     </ion-textarea>
   </div>
-  <ion-button id="open-modal" expand="block" (click)="loadLastPost()">Ver Última Imagen</ion-button>
-
+  <ion-fab vertical="bottom" horizontal="end">
+    <ion-fab-button id="open-modal" expand="block" (click)="loadPosts()" color="medium">
+      <ion-icon name="list"></ion-icon>
+    </ion-fab-button>
+  </ion-fab>
 </ion-content>
-<ion-modal #modalRef trigger="open-modal" [initialBreakpoint]="0.25" [breakpoints]="[0, 0.5, 0.75]">
+
+<ion-modal #viewModal>
+  <ng-template>
+    <ion-header>
+      <ion-toolbar>
+        <ion-buttons slot="end">
+          <ion-button (click)="viewModal.dismiss()">Cerrar</ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+    <ion-content class="ion-padding">
+      <div class="image-viewer">
+        <ion-img [src]="viewedImageUrl" class="full-size-image"></ion-img>
+        <ion-textarea
+          *ngIf="viewedImageDescription"
+          [(ngModel)]="viewedImageDescription"
+          readonly
+          fill="outline"
+          class="image-description"
+          [readonly]="true">
+        </ion-textarea>
+      </div>
+    </ion-content>
+  </ng-template>
+</ion-modal>
+
+<ion-modal #listModal trigger="open-modal" [initialBreakpoint]="0.25" [breakpoints]="[0, 0.5, 0.75]">
   <ng-template>
     <ion-content class="ion-padding">
-      <ion-searchbar placeholder="Search" (click)="modalRef.setCurrentBreakpoint(0.75)"></ion-searchbar>
+      <ion-searchbar placeholder="Buscar" (click)="listModal.setCurrentBreakpoint(0.75)" 
+                    (ionInput)="filterPosts($event)"></ion-searchbar>
 
-      <ion-list *ngIf="lastPost">
-        <ion-item>
+      <ion-list *ngIf="posts.length > 0">
+        <ion-item *ngFor="let post of filteredPosts">
           <ion-avatar slot="start">
-            <ion-img [src]="lastPost.imageUrl"></ion-img>
+            <ion-img [src]="post.imageUrl"></ion-img>
           </ion-avatar>
-          <ion-label>
-            <h2>{{ lastPost.description }}</h2>
+          <ion-label (click)="viewPost(post)">
+            <h2>{{ post.description }}</h2>
+            <p>{{ post.createdAt | date:'medium' }}</p>
           </ion-label>
+          <ion-button fill="clear" color="danger" slot="end" (click)="deletePost(post.id, $event)">
+            <ion-icon name="trash"></ion-icon>
+          </ion-button>
         </ion-item>
       </ion-list>
 
-      <ion-note *ngIf="!lastPost">
-        No data found.
+      <ion-note *ngIf="posts.length === 0" class="ion-text-center" style="display: block; margin-top: 20px;">
+        No hay imágenes guardadas
       </ion-note>
     </ion-content>
   </ng-template>
